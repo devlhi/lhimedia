@@ -23,7 +23,29 @@ Installer memasang Node.js 22+, FFmpeg, dependensi Node.js, dan `yt-dlp` yang di
 
 ## Instalasi Cepat di Ubuntu
 
-> Jalankan installer hanya dari root source project. Jangan memasukkan secret ke command history atau repository.
+> Perintah berikut mengunduh bootstrap dari branch `main`, clone project ke `/opt/botlink`, kemudian langsung menjalankan installer interaktif sebagai root. Tinjau isi [`bootstrap-install.sh`](bootstrap-install.sh) sebelum menjalankannya.
+
+### Instalasi satu perintah
+
+Dengan `curl`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo bash
+```
+
+Atau dengan `wget`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo bash
+```
+
+Folder instalasi dapat diganti tanpa mengubah script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo BOTLINK_INSTALL_DIR=/opt/lhimedia bash
+```
+
+### Instalasi manual
 
 1. Masuk ke server lalu clone repository:
 

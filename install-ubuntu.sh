@@ -59,6 +59,31 @@ env_quote() {
   printf '"%s"' "$value"
 }
 
+APT_UPDATED=false
+apt_update_once() {
+  if [[ "$APT_UPDATED" != true ]]; then
+    apt-get update
+    APT_UPDATED=true
+  fi
+}
+
+install_missing_packages() {
+  local package missing=()
+  for package in "$@"; do
+    if ! dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null | grep -q '^ii '; then
+      missing+=("$package")
+    fi
+  done
+
+  if (( ${#missing[@]} > 0 )); then
+    printf 'Memasang paket yang belum tersedia: %s\n' "${missing[*]}"
+    apt_update_once
+    apt-get install -y --no-install-recommends "${missing[@]}"
+  else
+    printf 'Semua paket sistem yang dibutuhkan sudah tersedia.\n'
+  fi
+}
+
 if [[ -e "$ENV_FILE" ]]; then
   read -r -p ".env sudah ada. Backup lalu ganti? [y/N]: " replace_env
   [[ "$replace_env" =~ ^[Yy]$ ]] || fail "Instalasi dibatalkan; .env tidak diubah."
@@ -129,16 +154,35 @@ TELEGRAM_VEO_DAILY_LIMIT=3
 TELEGRAM_VEO_STATUS_COOLDOWN_SECONDS=15
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y ca-certificates curl gnupg openssl ffmpeg python3 python3-pip
-if ! command -v node >/dev/null 2>&1 || (( $(node -p 'Number(process.versions.node.split(`.`)[0])') < NODE_MAJOR )); then
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
-  printf 'deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_%s.x nodistro main\n' "$NODE_MAJOR" > /etc/apt/sources.list.d/nodesource.list
-  apt-get update
-  apt-get install -y nodejs
+install_missing_packages ca-certificates curl gnupg openssl ffmpeg python3 python3-pip
+
+if command -v node >/dev/null 2>&1; then
+  INSTALLED_NODE_VERSION="$(node --version)"
+  INSTALLED_NODE_MAJOR="$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || true)"
+else
+  INSTALLED_NODE_VERSION="tidak tersedia"
+  INSTALLED_NODE_MAJOR=0
 fi
-(( $(node -p 'Number(process.versions.node.split(`.`)[0])') >= NODE_MAJOR )) || fail "Node.js 22 atau lebih baru gagal dipasang."
+
+if ! [[ "$INSTALLED_NODE_MAJOR" =~ ^[0-9]+$ ]] || (( INSTALLED_NODE_MAJOR < NODE_MAJOR )); then
+  printf 'Node.js %s terdeteksi; memasang Node.js %s.x.\n' "$INSTALLED_NODE_VERSION" "$NODE_MAJOR"
+  install -m 0755 -d /etc/apt/keyrings
+  NODE_SOURCE_KEYRING='/etc/apt/keyrings/nodesource.gpg'
+  NODE_SOURCE_LIST='/etc/apt/sources.list.d/nodesource.list'
+  if [[ ! -s "$NODE_SOURCE_KEYRING" ]]; then
+    curl -fsSL --proto '=https' --tlsv1.2 https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o "$NODE_SOURCE_KEYRING"
+  fi
+  printf 'deb [signed-by=%s] https://deb.nodesource.com/node_%s.x nodistro main\n' "$NODE_SOURCE_KEYRING" "$NODE_MAJOR" > "$NODE_SOURCE_LIST"
+  APT_UPDATED=false
+  apt_update_once
+  apt-get install -y --no-install-recommends nodejs
+else
+  printf 'Node.js %s sudah memenuhi kebutuhan (>= %s).\n' "$INSTALLED_NODE_VERSION" "$NODE_MAJOR"
+fi
+
+FINAL_NODE_MAJOR="$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || true)"
+[[ "$FINAL_NODE_MAJOR" =~ ^[0-9]+$ ]] && (( FINAL_NODE_MAJOR >= NODE_MAJOR )) || fail "Node.js ${NODE_MAJOR} atau lebih baru gagal dipasang."
+command -v npm >/dev/null 2>&1 || fail "npm tidak tersedia setelah instalasi Node.js."
 
 id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 cd "$APP_DIR"
