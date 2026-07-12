@@ -8,12 +8,15 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { validateMediaUrl } from './url-validator.js';
 import { downloadMedia } from './downloader.js';
-import { recentDownloads, recentVideoJobs, SQLiteSessionStore, stats } from './db.js';
+import { recentDownloads, recentSecurityEvents, recentVideoJobs, recordSecurityEvent, recordTrafficMetric, SQLiteSessionStore, stats, topTrafficRoutes, trafficSummary } from './db.js';
 import { verifyPassword } from './password.js';
 import { createNineRouterVideo, hasNineRouterKey, listNineRouterVideoModels, refreshNineRouterVideo } from './nine-router-video.js';
 import { getDownloadQueueStatus, runDownloadJob } from './download-queue.js';
 import { deleteTelegramWebhook, getTelegramStatus, setTelegramWebhook, startTelegram, stopTelegram, telegramWebhookMiddleware } from './telegram.js';
 import { validateVideoParameters } from './video-parameters.js';
+import { getSystemMetrics } from './system-metrics.js';
+import { classifySuspiciousRequest, normalizeRoutePath, pseudonymizeAddress, sanitizeSecurityEvent } from './security-monitor.js';
+import { importExternalSecurityEvents } from './security-log-importer.js';
 
 const forbiddenSecretParts = ['ubah-', 'ganti-', 'change-me', 'password', 'secret'];
 const validPasswordHash = /^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/i.test(config.adminPasswordHash);
@@ -47,9 +50,42 @@ app.use((req, res, next) => {
   res.locals.csrfToken = req.session.csrfToken || '';
   next();
 });
-const downloadLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, message: 'Terlalu banyak permintaan. Coba lagi nanti.' });
-const aiLimiter = rateLimit({ windowMs: 24 * 60 * 60_000, limit: 10, keyGenerator: (req) => req.sessionID, standardHeaders: 'draft-8', legacyHeaders: false, message: 'Batas harian generasi video tercapai.' });
-const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false });
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.once('finish', () => {
+    try {
+      const route = normalizeRoutePath(req.path, config.telegramWebhookPath);
+      const durationMs = Number((process.hrtime.bigint() - startedAt) / 1_000_000n);
+      recordTrafficMetric({
+        route,
+        statusCode: res.statusCode,
+        requestBytes: Number(req.get('content-length') || 0),
+        responseBytes: Number(res.getHeader('content-length') || 0),
+        durationMs,
+      });
+      const suspicious = classifySuspiciousRequest({ path: route, method: req.method, statusCode: res.statusCode, userAgent: req.get('user-agent'), isAdmin: route.startsWith('/admin') });
+      if (suspicious) recordSecurityEvent(sanitizeSecurityEvent({
+        ...suspicious,
+        actorHash: pseudonymizeAddress(req.ip, config.encryptionKey),
+        path: route,
+      }));
+    } catch (error) { console.error('Pencatatan traffic gagal:', String(error?.message || 'error').slice(0, 160)); }
+  });
+  next();
+});
+const rateLimitHandler = (category, message) => (req, res) => {
+  recordSecurityEvent(sanitizeSecurityEvent({
+    category,
+    severity: 'medium',
+    summary: message,
+    actorHash: pseudonymizeAddress(req.ip, config.encryptionKey),
+    path: normalizeRoutePath(req.path, config.telegramWebhookPath),
+  }));
+  res.status(429).send(message);
+};
+const downloadLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('download_rate_limit', 'Batas request download terlampaui.') });
+const aiLimiter = rateLimit({ windowMs: 24 * 60 * 60_000, limit: 10, keyGenerator: (req) => req.sessionID, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('ai_rate_limit', 'Batas harian generasi video tercapai.') });
+const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('login_rate_limit', 'Batas percobaan login admin terlampaui.') });
 
 app.get('/', (req, res) => res.render('index', { platforms: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'X'] }));
 app.post('/download', downloadLimiter, async (req, res) => {
@@ -94,8 +130,21 @@ app.use('/admin', (req, res, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !safeEqual(req.body.csrf || '', req.session.csrfToken || '')) return res.sendStatus(403);
   next();
 });
-const telegramAdminLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, keyGenerator: (req) => req.sessionID, standardHeaders: 'draft-8', legacyHeaders: false });
-app.get('/admin', (req, res) => res.render('admin', { downloads: recentDownloads(), stats: stats(), videoJobs: recentVideoJobs(5), queue: getDownloadQueueStatus() }));
+const telegramAdminLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, keyGenerator: (req) => req.sessionID, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('telegram_admin_rate_limit', 'Batas aksi admin Telegram terlampaui.') });
+app.get('/admin', (req, res) => {
+  importExternalSecurityEvents(config.securityEventFile);
+  res.render('admin', {
+    downloads: recentDownloads(),
+    stats: stats(),
+    videoJobs: recentVideoJobs(5),
+    queue: getDownloadQueueStatus(),
+    system: getSystemMetrics({ diskPath: path.dirname(config.dbPath) }),
+    traffic: trafficSummary(24),
+    trafficRoutes: topTrafficRoutes(24),
+    securityEvents: recentSecurityEvents(30),
+    externalMonitoring: Boolean(config.securityEventFile),
+  });
+});
 app.get('/admin/telegram', async (req, res) => {
   const status = await getTelegramStatus();
   res.render('admin-telegram', { status, telegramMode: config.telegramMode, message: String(req.query.message || '').slice(0, 240) });

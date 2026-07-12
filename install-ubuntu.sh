@@ -194,6 +194,10 @@ ENCRYPTION_KEY="$(openssl rand -hex 32)"
 
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$APP_DIR/data" "$APP_DIR/storage" "$APP_DIR/storage/tmp"
 install -d -o root -g "$SERVICE_USER" -m 0750 "$APP_DIR/bin"
+install -d -o root -g root -m 0755 /usr/local/lib/botlink
+install -d -o root -g "$SERVICE_USER" -m 0750 /var/lib/botlink-monitor
+install -o root -g root -m 0750 "$APP_DIR/scripts/collect-security-events.sh" /usr/local/lib/botlink/collect-security-events.sh
+install -o root -g "$SERVICE_USER" -m 0640 /dev/null /var/lib/botlink-monitor/events.log
 YTDLP_VERSION="2025.06.30"
 YTDLP_URL="https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/yt-dlp"
 YTDLP_SHA_URL="https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/SHA2-256SUMS"
@@ -233,6 +237,7 @@ DOWNLOAD_TIMEOUT_SECONDS=180
 CLEANUP_AFTER_MINUTES=30
 DOWNLOAD_CONCURRENCY=2
 DOWNLOAD_QUEUE_LIMIT=20
+SECURITY_EVENT_FILE="/var/lib/botlink-monitor/events.log"
 YTDLP_BINARY=$(env_quote "$APP_DIR/bin/yt-dlp")
 EOF
 unset NINE_ROUTER_API_KEY TELEGRAM_BOT_TOKEN TELEGRAM_WEBHOOK_SECRET TELEGRAM_VEO_ALLOWED_USER_IDS
@@ -281,8 +286,45 @@ ReadWritePaths=$APP_DIR/data $APP_DIR/storage
 WantedBy=multi-user.target
 EOF
 
+cat > "/etc/systemd/system/${SERVICE_NAME}-security-events.service" <<EOF
+[Unit]
+Description=Collect redacted BotLink VPS security signals
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/bash /usr/local/lib/botlink/collect-security-events.sh /var/lib/botlink-monitor/events.log
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/botlink-monitor
+EOF
+
+cat > "/etc/systemd/system/${SERVICE_NAME}-security-events.timer" <<EOF
+[Unit]
+Description=Run BotLink VPS security collector every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
+systemctl enable --now "${SERVICE_NAME}-security-events.timer"
+systemctl start "${SERVICE_NAME}-security-events.service" || true
 if ! systemctl restart "$SERVICE_NAME"; then
   journalctl -u "$SERVICE_NAME" -n 50 --no-pager >&2 || true
   fail "Service gagal dimulai."

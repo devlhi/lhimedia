@@ -10,6 +10,7 @@ Website dan bot Telegram berbasis Node.js untuk mengunduh **media publik yang pe
 - Mode Telegram `polling` atau `webhook` dengan secret token.
 - Perintah Veo Telegram berbasis allowlist ID pengguna, kepemilikan job, kuota, dan throttle.
 - Queue download bersama serta service systemd dengan resource hardening.
+- Dashboard resource VPS, traffic aplikasi, dan ringkasan sinyal keamanan aplikasi/Nginx/SSH/Fail2ban.
 
 ## Kebutuhan Produksi
 
@@ -155,9 +156,21 @@ Untuk menjalankan ulang installer, jalankan `sudo bash install-ubuntu.sh`. Jika 
    npm audit --omit=dev
    ```
 
-## Dashboard dan video AI
+## Dashboard, Resource VPS, dan Video AI
 
 Buka `/admin/login`, kemudian masukkan username/password yang dibuat saat instalasi. Login menggunakan session SQLite, cookie HttpOnly/SameSite, regenerasi session ID, CSRF token, serta rate limit.
+
+Dashboard menampilkan load CPU, RAM, disk, uptime VPS, memory proses Node.js, antrean, serta traffic HTTP teragregasi dalam 24 jam. Traffic hanya menyimpan jumlah request, kelas status, ukuran, durasi, dan route tanpa query string; tidak menyimpan cookie, body, URL sumber download, token, maupun password.
+
+Installer juga memasang timer `botlink-security-events.timer` yang berjalan tiap lima menit sebagai root dengan output **teredaksi** di `/var/lib/botlink-monitor/events.log`. Collector membaca sinyal login SSH gagal, blokir Fail2ban, dan pola scanner/error dari log Nginx bila komponen tersebut tersedia. Aplikasi hanya bisa membaca ringkasan teredaksi itu—bukan log mentah sistem. Periksa statusnya dengan:
+
+```bash
+sudo systemctl status botlink-security-events.timer
+sudo systemctl status botlink-security-events.service
+sudo journalctl -u botlink-security-events.service -n 100 --no-pager
+```
+
+Tabel **Aktivitas Mencurigakan** adalah indikator defensif, bukan bukti VPS telah diretas. IP dipseudonimkan dan event dibatasi retensinya: traffic 14 hari, event keamanan 90 hari. Raw log Nginx/SSH tetap dikelola oleh sistem log server.
 
 Menu **AI Video** menggunakan endpoint model `${NINE_ROUTER_API_URL}/models`, endpoint video `${NINE_ROUTER_API_URL}/${NINE_ROUTER_VIDEO_ENDPOINT}`, dan URL polling yang dikembalikan provider. API key hanya berada di `.env` dan tidak dapat diubah melalui browser. Isi endpoint video persis sesuai dokumentasi paket 9Router; kompatibilitas chat completion saja tidak cukup.
 
@@ -205,6 +218,9 @@ Untuk deployment publik, gunakan HTTPS/reverse proxy, firewall port aplikasi sup
 | `MAX_FILE_SIZE_MB` | Batas hasil download, default 45 MB. |
 | `DOWNLOAD_TIMEOUT_SECONDS` | Batas proses download, default 180 detik. |
 | `CLEANUP_AFTER_MINUTES` | Penghapusan file temporary, default 30 menit. |
+| `DOWNLOAD_CONCURRENCY` | Jumlah download aktif paralel. |
+| `DOWNLOAD_QUEUE_LIMIT` | Batas antrean download global. |
+| `SECURITY_EVENT_FILE` | Path absolut event VPS yang sudah teredaksi; otomatis diisi installer. |
 | `YTDLP_BINARY` | Lokasi binary `yt-dlp`; diisi installer produksi. |
 
 ## Update Aplikasi

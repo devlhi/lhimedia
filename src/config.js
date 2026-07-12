@@ -30,6 +30,13 @@ function webhookPath() {
   return value;
 }
 
+function optionalAbsolutePath(name) {
+  const value = String(process.env[name] || '');
+  if (!value) return '';
+  if (!path.isAbsolute(value) || value.includes('\0')) throw new Error(`${name} harus berupa path absolut.`);
+  return value;
+}
+
 function telegramUserIds(name) {
   const raw = String(process.env[name] || '').trim();
   if (!raw) return new Set();
@@ -77,6 +84,7 @@ export const config = {
   downloadConcurrency: integer('DOWNLOAD_CONCURRENCY', 2, 1, 10),
   downloadQueueLimit: integer('DOWNLOAD_QUEUE_LIMIT', 20, 1, 1000),
   ytdlpBinary: process.env.YTDLP_BINARY || path.resolve('bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'),
+  securityEventFile: optionalAbsolutePath('SECURITY_EVENT_FILE'),
   tempDir: path.resolve('storage', 'tmp'),
   dbPath: path.resolve('data', 'botlink.db'),
 };
