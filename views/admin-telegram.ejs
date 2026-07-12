@@ -1,0 +1,55 @@
+<%- include('partials/header') %>
+<section class="dashboard">
+  <div class="admin-head">
+    <div class="section-title"><span>TELEGRAM</span><h1>Bot & Webhook</h1></div>
+    <a class="button secondary" href="/admin">Kembali ke Dashboard</a>
+  </div>
+
+  <% if (message) { %><div class="notice"><%= message %></div><% } %>
+
+  <% if (!status.configured) { %>
+    <div class="panel"><h2>Bot belum dikonfigurasi</h2><p>Jalankan installer dan masukkan token dari BotFather. Token tidak dapat dilihat atau diubah melalui browser.</p></div>
+  <% } else { %>
+    <div class="stats">
+      <article><small>Mode runtime</small><b><%= status.mode %></b></article>
+      <article><small>Bot</small><b><%= status.bot ? '@' + status.bot.username : 'Tidak tersedia' %></b></article>
+      <article><small>Pending update</small><b><%= status.webhook ? status.webhook.pendingUpdateCount : '-' %></b></article>
+      <article><small>Webhook</small><b><%= status.webhook && status.webhook.url ? 'Aktif' : 'Tidak aktif' %></b></article>
+    </div>
+
+    <% if (status.startupError) { %><div class="notice danger"><%= status.startupError %></div><% } %>
+
+    <div class="panel">
+      <h2>Informasi webhook Telegram</h2>
+      <dl class="details">
+        <dt>Mode konfigurasi</dt><dd><%= telegramMode %></dd>
+        <dt>URL yang diharapkan</dt><dd class="break"><%= status.expectedWebhookUrl || 'Hanya tersedia pada mode webhook' %></dd>
+        <dt>URL aktif di Telegram</dt><dd class="break"><%= status.webhook && status.webhook.url ? status.webhook.url : 'Tidak ada' %></dd>
+        <dt>Alamat IP</dt><dd><%= status.webhook && status.webhook.ipAddress ? status.webhook.ipAddress : '-' %></dd>
+        <dt>Maksimum koneksi</dt><dd><%= status.webhook && status.webhook.maxConnections !== null ? status.webhook.maxConnections : '-' %></dd>
+        <dt>Update diizinkan</dt><dd><%= status.webhook && status.webhook.allowedUpdates.length ? status.webhook.allowedUpdates.join(', ') : '-' %></dd>
+        <dt>Error terakhir</dt><dd><%= status.webhook && status.webhook.lastErrorMessage ? status.webhook.lastErrorMessage : '-' %></dd>
+      </dl>
+    </div>
+
+    <div class="action-grid">
+      <form class="panel" method="post" action="/admin/telegram/webhook/set">
+        <input type="hidden" name="csrf" value="<%= csrfToken %>">
+        <h2>Set webhook</h2>
+        <p>Mendaftarkan URL dari <code>APP_URL</code> dan path rahasia yang dibuat installer. Browser tidak dapat memasukkan URL arbitrary.</p>
+        <label class="check"><input type="checkbox" name="dropPendingUpdates" value="1"> Hapus update Telegram yang masih tertunda</label>
+        <button class="button" type="submit" <%= telegramMode !== 'webhook' ? 'disabled' : '' %>>Set Webhook</button>
+        <% if (telegramMode !== 'webhook') { %><small>Ubah <code>TELEGRAM_MODE=webhook</code> melalui installer lalu restart service.</small><% } %>
+      </form>
+
+      <form class="panel" method="post" action="/admin/telegram/webhook/delete">
+        <input type="hidden" name="csrf" value="<%= csrfToken %>">
+        <h2>Hapus webhook</h2>
+        <p>Menghapus webhook dari Telegram. Update tertunda dipertahankan kecuali pilihan berikut diaktifkan.</p>
+        <label class="check"><input type="checkbox" name="dropPendingUpdates" value="1"> Hapus update Telegram yang masih tertunda</label>
+        <button class="button danger-button" type="submit">Hapus Webhook</button>
+      </form>
+    </div>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

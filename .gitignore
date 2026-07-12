@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.backup.*
+.env.tmp.*
+data/*.db
+data/*.db-*
+storage/tmp/*
+!storage/tmp/.gitkeep
+storage/*.log
+npm-debug.log*
