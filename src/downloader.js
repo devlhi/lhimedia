@@ -37,7 +37,11 @@ export async function downloadMedia({ url, platform, source, userRef }) {
     const timer = setTimeout(() => controller.abort(), config.timeoutMs);
     let stdout = '';
     try {
-      stdout = await ytdlp.execPromise([url, '--no-playlist', '--no-warnings', '--restrict-filenames', '--max-filesize', `${config.maxFileMb}M`, '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b', '--merge-output-format', 'mp4', '--print', 'after_move:filepath', '-o', output], { shell: false }, controller.signal);
+      stdout = await ytdlp.execPromise([
+        '--ignore-config', '--no-playlist', '--no-warnings', '--restrict-filenames',
+        '--max-filesize', `${config.maxFileMb}M`, '-f', 'bv*[height<=1080]+ba/b[height<=1080]/b',
+        '--merge-output-format', 'mp4', '--print', 'after_move:filepath', '-o', output, '--', url,
+      ], { shell: false, maxBuffer: 1024 * 1024 }, controller.signal);
     } finally { clearTimeout(timer); }
     const printedPath = String(stdout || '').trim().split(/\r?\n/).filter(Boolean).at(-1);
     if (!printedPath) throw new Error('Media tidak tersedia atau melebihi batas ukuran.');

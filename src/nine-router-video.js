@@ -1,8 +1,10 @@
 import { config } from './config.js';
-import { activeVideoJobCount, createVideoJob, getVideoJob, updateVideoJob } from './db.js';
+import { activeVideoJobCount, createVideoJob, expireStaleVideoJobs, getVideoJob, updateVideoJob } from './db.js';
 import { DEFAULT_VIDEO_MODEL } from './video-parameters.js';
 
 const MAX_ACTIVE_VIDEO_JOBS = 2;
+const MAX_PROVIDER_RESPONSE_BYTES = 512 * 1024;
+expireStaleVideoJobs('9router');
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired', 'succeeded', 'success']);
 const ALLOWED_STATUSES = new Set(['queued', 'pending', 'processing', 'running', 'completed', 'failed', 'cancelled', 'expired']);
 let generationRequestInFlight = false;
@@ -53,6 +55,7 @@ async function request(pathOrUrl, options = {}) {
   if (!isProviderUrl(url)) throw new Error('URL API provider tidak diizinkan.');
   const response = await fetch(url, {
     ...options,
+    redirect: 'manual',
     headers: {
       Authorization: `Bearer ${config.nineRouterApiKey}`,
       Accept: 'application/json',
@@ -61,8 +64,16 @@ async function request(pathOrUrl, options = {}) {
     },
     signal: AbortSignal.timeout(30_000),
   });
+  if (response.status >= 300 && response.status < 400) throw new Error('API 9Router mengembalikan redirect yang tidak diizinkan.');
   if (!response.ok) throw new Error(`API 9Router menolak permintaan (${response.status}).`);
-  return response.json();
+  const contentLength = Number(response.headers.get('content-length') || 0);
+  if (!Number.isSafeInteger(contentLength) || contentLength < 0 || contentLength > MAX_PROVIDER_RESPONSE_BYTES) {
+    throw new Error('Respons API 9Router tidak valid atau terlalu besar.');
+  }
+  const body = Buffer.from(await response.arrayBuffer());
+  if (body.length > MAX_PROVIDER_RESPONSE_BYTES) throw new Error('Respons API 9Router terlalu besar.');
+  try { return JSON.parse(body.toString('utf8')); }
+  catch { throw new Error('Respons API 9Router bukan JSON valid.'); }
 }
 
 function normalizedJob(payload) {

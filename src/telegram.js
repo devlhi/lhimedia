@@ -180,7 +180,11 @@ export function telegramWebhookUrl() {
 }
 
 export async function startTelegram() {
-  if (!bot) return { mode: 'disabled' };
+  if (!bot || config.telegramMode === 'disabled') {
+    mode = 'disabled';
+    startupError = '';
+    return { mode };
+  }
   try {
     bot.botInfo = await bot.telegram.getMe();
     if (config.telegramMode === 'webhook') {
@@ -219,6 +223,9 @@ export function telegramWebhookMiddleware() {
 
 export async function getTelegramStatus() {
   if (!bot) return { configured: false, mode: 'disabled', startupError: '' };
+  if (config.telegramMode === 'disabled') {
+    return { configured: true, mode: 'disabled', startupError: '', bot: null, expectedWebhookUrl: '', webhook: null };
+  }
   try {
     const [me, webhook] = await Promise.all([bot.telegram.getMe(), bot.telegram.getWebhookInfo()]);
     return {

@@ -12,11 +12,12 @@
   <% } else { %>
     <div class="stats">
       <article><small>Mode runtime</small><b><%= status.mode %></b></article>
-      <article><small>Bot</small><b><%= status.bot ? '@' + status.bot.username : 'Tidak tersedia' %></b></article>
+      <article><small>Bot</small><b><%= status.bot ? '@' + status.bot.username : status.mode === 'disabled' ? 'Dinonaktifkan' : 'Tidak tersedia' %></b></article>
       <article><small>Pending update</small><b><%= status.webhook ? status.webhook.pendingUpdateCount : '-' %></b></article>
       <article><small>Webhook</small><b><%= status.webhook && status.webhook.url ? 'Aktif' : 'Tidak aktif' %></b></article>
     </div>
 
+    <% if (status.mode === 'disabled') { %><div class="notice">Token tersimpan, tetapi TELEGRAM_MODE=disabled. Service tidak menghubungi Telegram dan tidak menerima update.</div><% } %>
     <% if (status.startupError) { %><div class="notice danger"><%= status.startupError %></div><% } %>
 
     <div class="panel">

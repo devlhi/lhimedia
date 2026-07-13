@@ -22,39 +22,44 @@ Website dan bot Telegram berbasis Node.js untuk mengunduh **media publik yang pe
 
 Installer memasang Node.js 22+, FFmpeg, dependensi Node.js, dan `yt-dlp` yang dipin serta diverifikasi SHA-256. Database SQLite dibuat otomatis di `data/botlink.db`.
 
-## Instalasi Cepat di Ubuntu
+## Instalasi Aman di Ubuntu
 
-> Perintah berikut mengunduh bootstrap dari branch `main`, clone project ke `/opt/botlink`, kemudian langsung menjalankan installer interaktif sebagai root. Tinjau isi [`bootstrap-install.sh`](bootstrap-install.sh) sebelum menjalankannya.
-
-### Instalasi satu perintah
+Jangan pipe script internet langsung ke shell root. Tentukan full commit SHA 40 karakter yang telah ditinjau dari halaman commit/release repository, lalu unduh dan periksa bootstrap sebelum menjalankannya.
 
 Dengan `curl`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo bash
+curl -fL --proto '=https' --tlsv1.2 https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh -o bootstrap-install.sh
+less bootstrap-install.sh
+sudo BOTLINK_COMMIT=<FULL_COMMIT_SHA_40_KARAKTER> bash bootstrap-install.sh
 ```
 
 Atau dengan `wget`:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo bash
+wget --https-only -O bootstrap-install.sh https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh
+less bootstrap-install.sh
+sudo BOTLINK_COMMIT=<FULL_COMMIT_SHA_40_KARAKTER> bash bootstrap-install.sh
 ```
 
-Folder instalasi dapat diganti tanpa mengubah script:
+Bootstrap menolak eksekusi noninteraktif, memerlukan commit immutable, memverifikasi commit checkout, dan memasang ke `/opt/botlink`. Folder alternatif harus tetap berada di bawah `/opt`:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/devlhi/lhimedia/main/bootstrap-install.sh | sudo BOTLINK_INSTALL_DIR=/opt/lhimedia bash
+sudo BOTLINK_COMMIT=<FULL_COMMIT_SHA_40_KARAKTER> BOTLINK_INSTALL_DIR=/opt/lhimedia bash bootstrap-install.sh
 ```
+
+> Pin commit mencegah branch berpindah saat instalasi, tetapi tetap verifikasi identitas repository/commit melalui kanal tepercaya. Checksum yang disajikan dari sumber yang sama tidak melindungi jika seluruh sumber tersebut dikompromikan.
 
 ### Instalasi manual
 
-1. Masuk ke server lalu clone repository:
+1. Masuk ke server lalu clone repository ke `/opt`, kemudian checkout commit yang sudah ditinjau:
 
    ```bash
    sudo apt-get update
    sudo apt-get install -y git
-   git clone https://github.com/devlhi/lhimedia.git botlink
-   cd botlink
+   sudo git clone https://github.com/devlhi/lhimedia.git /opt/botlink
+   sudo git -C /opt/botlink checkout --detach <FULL_COMMIT_SHA_40_KARAKTER>
+   cd /opt/botlink
    ```
 
 2. Jalankan installer interaktif:
@@ -85,7 +90,7 @@ Installer membuat `.env` dengan permission `root:botlink` mode `0640`, membuat u
 
 ## Konfigurasi Reverse Proxy dan HTTPS
 
-Aplikasi hanya mendengarkan port internal yang dipilih installer (default `3100`). Untuk deployment publik, letakkan Nginx/Caddy di depan aplikasi, aktifkan HTTPS, lalu blok akses publik langsung ke port aplikasi menggunakan firewall/provider firewall.
+Aplikasi hanya mendengarkan loopback `BIND_HOST=127.0.0.1` pada port internal yang dipilih installer (default `3100`). Nilai bind sengaja dibatasi ke `127.0.0.1`, `::1`, atau `localhost`. Untuk deployment publik, letakkan Nginx/Caddy di depan aplikasi dan aktifkan HTTPS; jangan mengekspos port Node.js langsung.
 
 Contoh Nginx ringkas (`/etc/nginx/sites-available/botlink`):
 

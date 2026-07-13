@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { recordSecurityEvent } from './db.js';
 import { sanitizeSecurityEvent } from './security-monitor.js';
 
@@ -18,27 +19,39 @@ export function importExternalSecurityEvents(filePath) {
   state.identity = identity;
   if (stat.size <= state.position) return 0;
 
-  const start = Math.max(state.position, stat.size - MAX_BYTES);
+  const previousPosition = state.position;
+  const start = Math.max(previousPosition, stat.size - MAX_BYTES);
   let content;
   try {
     const length = stat.size - start;
     const descriptor = fs.openSync(filePath, 'r');
-    const buffer = Buffer.alloc(length);
-    fs.readSync(descriptor, buffer, 0, length, start);
-    fs.closeSync(descriptor);
-    content = buffer.toString('utf8');
+    try {
+      const buffer = Buffer.alloc(length);
+      fs.readSync(descriptor, buffer, 0, length, start);
+      content = buffer.toString('utf8');
+    } finally { fs.closeSync(descriptor); }
   } catch { return 0; }
   state.position = stat.size;
 
   const lines = content.split('\n');
-  if (start > 0) lines.shift();
+  if (start > previousPosition && lines.length > 0) lines.shift();
+  if (lines.length > 0 && lines[lines.length - 1] !== '') {
+    const lastLineLength = Buffer.byteLength(lines.pop(), 'utf8');
+    state.position = Math.max(start, state.position - lastLineLength);
+  }
   let imported = 0;
   for (const line of lines) {
-    const [timestamp, source, severity, category, ...summaryParts] = line.split('\t');
+    const parts = line.split('\t');
+    if (parts.length < 5) continue;
+    const [timestamp, source, severity, category, ...summaryParts] = parts;
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(timestamp || '')) continue;
-    const event = sanitizeSecurityEvent({ source, severity, category, summary: summaryParts.join(' ') });
+    const summary = summaryParts.join(' ');
+    const event = sanitizeSecurityEvent({ source, severity, category, summary });
     if (!event.summary) continue;
-    recordSecurityEvent(event);
+
+    // Deduplikasi tingkat lanjut: gunakan hash baris sebagai metadata untuk melacak event unik
+    const fingerprint = crypto.createHash('sha256').update(line).digest('hex');
+    recordSecurityEvent({ ...event, metadata: fingerprint, createdAt: timestamp });
     imported += 1;
   }
   return imported;

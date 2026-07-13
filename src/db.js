@@ -91,13 +91,24 @@ export function trafficSummary(hours = 24) {
 export const topTrafficRoutes = (hours = 24, limit = 6) => db.prepare(`SELECT route, SUM(request_count) AS requests,
   SUM(response_bytes) AS response_bytes FROM traffic_buckets WHERE bucket_at >= datetime('now', ?)
   GROUP BY route ORDER BY requests DESC LIMIT ?`).all(`-${Math.max(1, Math.min(Number(hours) || 24, 168))} hours`, Math.max(1, Math.min(Number(limit) || 6, 20)));
-export function recordSecurityEvent({ source, category, severity, summary, actorHash = '', path = '', metadata = '' }) {
-  db.prepare(`INSERT INTO security_events (source, category, severity, summary, actor_hash, path, metadata)
-    SELECT ?, ?, ?, ?, ?, ?, ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM security_events WHERE source = ? AND category = ? AND COALESCE(actor_hash, '') = ?
-      AND created_at >= datetime('now', '-5 minutes')
-    )`).run(source, category, severity, summary, actorHash, path, metadata, source, category, actorHash);
+export function recordSecurityEvent({ source, category, severity, summary, actorHash = '', path = '', metadata = '', createdAt = '' }) {
+  const timestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(createdAt) ? createdAt : null;
+  if (metadata) {
+    // Deduplikasi berdasarkan fingerprint hash baris jika tersedia
+    const existing = db.prepare(`SELECT 1 FROM security_events WHERE metadata = ? LIMIT 1`).get(metadata);
+    if (existing) return;
+  }
+  if (timestamp) {
+    db.prepare(`INSERT INTO security_events (source, category, severity, summary, actor_hash, path, metadata, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(source, category, severity, summary, actorHash, path, metadata, timestamp);
+  } else {
+    db.prepare(`INSERT INTO security_events (source, category, severity, summary, actor_hash, path, metadata)
+      SELECT ?, ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM security_events WHERE source = ? AND category = ? AND COALESCE(actor_hash, '') = ?
+        AND created_at >= datetime('now', '-5 minutes')
+      )`).run(source, category, severity, summary, actorHash, path, metadata, source, category, actorHash);
+  }
 }
 export const recentSecurityEvents = (limit = 30) => db.prepare(`SELECT id, source, category, severity, summary, actor_hash, path, metadata, created_at
   FROM security_events ORDER BY id DESC LIMIT ?`).all(Math.max(1, Math.min(Number(limit) || 30, 100)));
@@ -120,6 +131,12 @@ export function updateVideoJob(id, fields) {
 export const getVideoJob = (id) => db.prepare('SELECT * FROM video_jobs WHERE id = ?').get(id);
 export const getTelegramVideoJob = (id, telegramUserId) => db.prepare("SELECT * FROM video_jobs WHERE id = ? AND source = 'telegram' AND telegram_user_id = ?").get(id, telegramUserId);
 export const recentVideoJobs = (limit = 30) => db.prepare('SELECT * FROM video_jobs ORDER BY id DESC LIMIT ?').all(limit);
+export function expireStaleVideoJobs(provider, ageMinutes = 30) {
+  const boundedAge = Math.max(5, Math.min(Number(ageMinutes) || 30, 1440));
+  return Number(db.prepare(`UPDATE video_jobs SET status = 'expired', error = ?, completed_at = CURRENT_TIMESTAMP
+    WHERE provider = ? AND status IN ('queued', 'pending') AND created_at < datetime('now', ?)`)
+    .run('Job kedaluwarsa setelah service berhenti sebelum provider mengonfirmasi penerimaan.', provider, `-${boundedAge} minutes`).changes || 0);
+}
 export const activeVideoJobCount = (provider) => Number(db.prepare(`SELECT COUNT(*) AS total FROM video_jobs
   WHERE provider = ? AND status NOT IN ('completed', 'failed', 'cancelled', 'expired')`).get(provider)?.total || 0);
 export const activeTelegramVideoJobCount = (telegramUserId) => Number(db.prepare(`SELECT COUNT(*) AS total FROM video_jobs

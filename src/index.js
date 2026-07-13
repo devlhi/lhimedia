@@ -29,7 +29,7 @@ const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.resolve('views'));
 app.disable('x-powered-by');
-if (config.isProduction) app.set('trust proxy', 1);
+if (config.isProduction) app.set('trust proxy', ['loopback']);
 app.use(helmet({ contentSecurityPolicy: { directives: { 'script-src': ["'self'"], 'style-src': ["'self'", 'https://fonts.googleapis.com'], 'font-src': ["'self'", 'https://fonts.gstatic.com'] } } }));
 const webhookMiddleware = telegramWebhookMiddleware();
 if (webhookMiddleware) app.post(config.telegramWebhookPath, express.json({ limit: '256kb', type: 'application/json' }), webhookMiddleware);
@@ -208,7 +208,7 @@ app.use((error, req, res, next) => {
   res.status(status).render('error', { message: status === 413 ? 'Request terlalu besar.' : 'Terjadi kesalahan internal.' });
 });
 
-const server = app.listen(config.port, () => console.log(`${config.name} aktif di ${config.appUrl}`));
+const server = app.listen(config.port, config.bindHost, () => console.log(`${config.name} aktif di ${config.appUrl} (${config.bindHost}:${config.port})`));
 await startTelegram();
 for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => {
   stopTelegram();

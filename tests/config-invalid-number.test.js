@@ -19,3 +19,23 @@ test('webhook mode rejects insecure configuration', () => {
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}\n${result.stderr}`, /Mode webhook Telegram membutuhkan/);
 });
+
+test('configuration only allows loopback listener addresses', () => {
+  for (const value of ['0.0.0.0', '192.168.1.10', 'example.com']) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `import(${JSON.stringify(configUrl)})`], {
+      env: { ...process.env, PORT: '3100', BIND_HOST: value }, encoding: 'utf8',
+    });
+    assert.notEqual(result.status, 0, value);
+    assert.match(`${result.stdout}\n${result.stderr}`, /BIND_HOST hanya boleh berupa alamat loopback/);
+  }
+});
+
+test('configuration accepts documented loopback listener addresses', () => {
+  for (const value of ['127.0.0.1', '::1', 'localhost']) {
+    const result = spawnSync(process.execPath, ['--input-type=module', '--eval', `import(${JSON.stringify(configUrl)}).then(({ config }) => console.log(config.bindHost))`], {
+      env: { ...process.env, PORT: '3100', BIND_HOST: value }, encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, `${value}: ${result.stderr}`);
+    assert.equal(result.stdout.trim(), value);
+  }
+});

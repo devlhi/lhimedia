@@ -15,6 +15,14 @@ function enumValue(name, fallback, allowed) {
   return value;
 }
 
+function bindHost() {
+  const value = String(process.env.BIND_HOST || '127.0.0.1').trim().toLowerCase();
+  if (!['127.0.0.1', '::1', 'localhost'].includes(value)) {
+    throw new Error('BIND_HOST hanya boleh berupa alamat loopback (127.0.0.1, ::1, atau localhost).');
+  }
+  return value;
+}
+
 function applicationUrl() {
   const value = String(process.env.APP_URL || 'http://localhost:3100').replace(/\/+$/, '');
   let parsed;
@@ -59,6 +67,7 @@ if (telegramMode === 'webhook' && (!String(process.env.TELEGRAM_BOT_TOKEN || '')
 export const config = {
   name: String(process.env.APP_NAME || 'BotLink').slice(0, 100),
   port: integer('PORT', 3100, 1024, 65535),
+  bindHost: bindHost(),
   appUrl,
   botToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramMode,

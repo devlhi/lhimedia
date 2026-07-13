@@ -17,6 +17,9 @@ trap cleanup EXIT
 
 [[ "${EUID}" -eq 0 ]] || fail "Jalankan sebagai root: sudo bash install-ubuntu.sh"
 [[ -f "$APP_DIR/package.json" && -f "$APP_DIR/src/index.js" ]] || fail "Installer harus berada di folder root source BotLink."
+case "$APP_DIR" in
+  /home/*|/root|/root/*) fail "Instal BotLink di luar direktori home (disarankan /opt/botlink) agar kompatibel dengan ProtectHome=true." ;;
+esac
 [[ -t 0 && -t 1 ]] || fail "Installer memerlukan terminal interaktif."
 
 prompt_value() {
@@ -186,13 +189,14 @@ command -v npm >/dev/null 2>&1 || fail "npm tidak tersedia setelah instalasi Nod
 
 id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"
 cd "$APP_DIR"
-npm ci --omit=dev
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$APP_DIR/data" "$APP_DIR/storage" "$APP_DIR/storage/tmp"
+install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$APP_DIR/node_modules"
+runuser -u "$SERVICE_USER" -- env HOME="$APP_DIR/storage" npm ci --omit=dev --ignore-scripts
 ADMIN_PASSWORD_HASH="$(printf '%s' "$ADMIN_PASSWORD" | node scripts/hash-password.js --stdin)"
 unset ADMIN_PASSWORD
 SESSION_SECRET="$(openssl rand -hex 32)"
 ENCRYPTION_KEY="$(openssl rand -hex 32)"
 
-install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$APP_DIR/data" "$APP_DIR/storage" "$APP_DIR/storage/tmp"
 install -d -o root -g "$SERVICE_USER" -m 0750 "$APP_DIR/bin"
 install -d -o root -g root -m 0755 /usr/local/lib/botlink
 install -d -o root -g "$SERVICE_USER" -m 0750 /var/lib/botlink-monitor
@@ -214,6 +218,7 @@ cat > "$TEMP_ENV" <<EOF
 APP_NAME=$(env_quote "$APP_NAME")
 NODE_ENV=production
 PORT=$PORT
+BIND_HOST=127.0.0.1
 APP_URL=$(env_quote "$APP_URL")
 TELEGRAM_BOT_TOKEN=$(env_quote "$TELEGRAM_BOT_TOKEN")
 TELEGRAM_MODE=$(env_quote "$TELEGRAM_MODE")
@@ -247,6 +252,10 @@ mv -f "$TEMP_ENV" "$ENV_FILE"
 chown root:"$SERVICE_USER" "$ENV_FILE"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR/data" "$APP_DIR/storage"
 chown -R root:"$SERVICE_USER" "$APP_DIR/bin"
+chown -R root:root "$APP_DIR/node_modules"
+chmod -R go-w "$APP_DIR/node_modules"
+find "$APP_DIR" -path "$APP_DIR/data" -prune -o -path "$APP_DIR/storage" -prune -o -path "$APP_DIR/bin" -prune -o -path "$APP_DIR/.env" -prune -o -exec chown root:root {} +
+chmod 0755 "$APP_DIR"
 chmod 0750 "$APP_DIR/bin"
 chmod 0550 "$APP_DIR/bin/yt-dlp"
 
