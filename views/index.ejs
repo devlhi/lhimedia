@@ -1,1 +1,48 @@
-<%- include('partials/header') %><section class="hero"><div class="badge">UNDUH CEPAT • GRATIS • MUDAH</div><h1>Simpan video favoritmu<br><span>dalam sekali klik.</span></h1><p>Tempel link media publik, biarkan BotLink mengerjakan sisanya. Tanpa aplikasi tambahan.</p><form class="download" action="/download" method="post"><input type="url" name="url" required maxlength="2048" placeholder="Tempel link Facebook, Instagram, TikTok..." aria-label="URL media"><button type="submit">Unduh Sekarang ↓</button></form><small>Dengan mengunduh, Anda menyatakan mempunyai hak atau izin atas konten.</small></section><section id="platform" class="platforms"><p>PLATFORM YANG DIDUKUNG</p><div><% platforms.forEach(p => { %><span><b>●</b> <%= p %></span><% }) %></div></section><section id="cara" class="section"><div class="section-title"><span>CARA KERJA</span><h2>Sederhana, cepat, selesai.</h2></div><div class="steps"><article><i>01</i><h3>Salin link</h3><p>Pilih konten publik dari platform yang didukung lalu salin tautannya.</p></article><article><i>02</i><h3>Tempel di BotLink</h3><p>Masukkan tautan ke kotak di atas dan tekan tombol unduh.</p></article><article><i>03</i><h3>Simpan media</h3><p>Tunggu pemrosesan selesai lalu file akan terkirim otomatis.</p></article></div></section><section class="telegram"><div><span>BOT TELEGRAM</span><h2>Lebih suka lewat Telegram?</h2><p>Kirim link langsung ke bot dan dapatkan media tanpa membuka browser.</p></div><div class="phone">✈<strong>Kirim Link</strong><small>Bot memproses otomatis</small></div></section><%- include('partials/footer') %>
+<%- include('partials/header', { bodyClass: 'landing-page' }) %>
+<section class="landing">
+  <div class="landing-orb landing-orb-one" aria-hidden="true"></div>
+  <div class="landing-orb landing-orb-two" aria-hidden="true"></div>
+  <div class="landing-hero">
+    <div class="landing-copy">
+      <span class="landing-eyebrow"><span aria-hidden="true">✦</span> Pengunduh media publik</span>
+      <h1>Simpan momen yang<br><em>ingin kamu tonton lagi.</em></h1>
+      <p>Tempel tautan dari platform favoritmu. BotLink menyiapkan file media dengan alur yang sederhana dan cepat.</p>
+      <form class="landing-download" action="/download" method="post">
+        <label for="media-url" class="sr-only">Tautan media publik</label>
+        <span class="landing-link-icon" aria-hidden="true">↗</span>
+        <input id="media-url" type="url" name="url" required maxlength="2048" placeholder="Tempel tautan video di sini" aria-describedby="download-note">
+        <button type="submit">Ambil media <span aria-hidden="true">→</span></button>
+      </form>
+      <p id="download-note" class="landing-note"><span aria-hidden="true">✓</span> Hanya gunakan untuk konten publik yang kamu miliki atau diizinkan pemiliknya.</p>
+      <div class="landing-proof" aria-label="Keunggulan layanan"><span><b>⚡</b> Proses ringkas</span><span><b>⌁</b> Tanpa aplikasi</span><span><b>◌</b> Privasi terjaga</span></div>
+    </div>
+    <div class="landing-visual" aria-hidden="true">
+      <div class="landing-card landing-card-main">
+        <div class="landing-card-top"><span class="landing-card-avatar">B</span><span class="landing-card-menu">•••</span></div>
+        <div class="landing-video-preview"><span>▶</span><i></i><small>00:48</small></div>
+        <div class="landing-card-lines"><b></b><i></i></div>
+        <div class="landing-card-footer"><span>Video siap</span><strong>↓ Simpan</strong></div>
+      </div>
+      <div class="landing-float landing-float-success"><span>✓</span><div><b>Siap diunduh</b><small>Media telah diproses</small></div></div>
+      <div class="landing-float landing-float-link"><span>↗</span><div><b>Tautan diterima</b><small>Memulai proses</small></div></div>
+      <div class="landing-spark landing-spark-one">✦</div><div class="landing-spark landing-spark-two">✦</div>
+    </div>
+  </div>
+  <section id="platform" class="landing-platforms">
+    <p>Kompatibel dengan platform populer</p>
+    <div><% platforms.forEach(p => { %><span><b>●</b> <%= p %></span><% }) %></div>
+  </section>
+</section>
+<section id="cara" class="landing-how">
+  <div class="landing-section-heading"><span>Hanya tiga langkah</span><h2>Mulai dari tautan,<br>berakhir di perangkatmu.</h2><p>Tanpa alur rumit. Kamu cukup membawa link media publik yang ingin disimpan.</p></div>
+  <div class="landing-steps">
+    <article><span class="landing-step-number">01</span><div class="landing-step-icon">⧉</div><h3>Salin tautan</h3><p>Buka konten publik yang diinginkan lalu salin link dari platform asalnya.</p></article>
+    <article><span class="landing-step-number">02</span><div class="landing-step-icon">↗</div><h3>Tempelkan di sini</h3><p>Masukkan tautan pada kolom di atas dan mulai proses dengan satu klik.</p></article>
+    <article><span class="landing-step-number">03</span><div class="landing-step-icon">↓</div><h3>Simpan media</h3><p>BotLink menyiapkan media, lalu kamu dapat menyimpannya saat sudah siap.</p></article>
+  </div>
+</section>
+<section class="landing-telegram">
+  <div><span>TELEGRAM BOT</span><h2>Lebih praktis lewat chat.</h2><p>Kirim tautan ke bot Telegram dan proses media tanpa perlu membuka browser.</p></div>
+  <div class="landing-chat-preview" aria-hidden="true"><span class="landing-chat-plane">➤</span><div><small>BotLink</small><b>Tempel link, kami bantu proses.</b></div><i>✓</i></div>
+</section>
+<%- include('partials/footer') %>
