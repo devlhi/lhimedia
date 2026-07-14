@@ -1,6 +1,7 @@
 import express from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
+import QRCode from 'qrcode';
 import { rateLimit } from 'express-rate-limit';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,7 +13,7 @@ import { recentDownloads, recentSecurityEvents, recentVideoJobs, recordSecurityE
 import { verifyPassword } from './password.js';
 import { createNineRouterVideo, hasNineRouterKey, listNineRouterVideoModels, refreshNineRouterVideo } from './nine-router-video.js';
 import { getDownloadQueueStatus, runDownloadJob } from './download-queue.js';
-import { deleteTelegramWebhook, getTelegramStatus, setTelegramWebhook, startTelegram, stopTelegram, telegramWebhookMiddleware } from './telegram.js';
+import { deleteTelegramWebhook, getPublicTelegramInfo, getTelegramStatus, setTelegramWebhook, startTelegram, stopTelegram, telegramWebhookMiddleware } from './telegram.js';
 import { validateVideoParameters } from './video-parameters.js';
 import { getSystemMetrics } from './system-metrics.js';
 import { classifySuspiciousRequest, normalizeRoutePath, pseudonymizeAddress, sanitizeSecurityEvent } from './security-monitor.js';
@@ -87,12 +88,31 @@ const downloadLimiter = rateLimit({ windowMs: 60 * 60_000, limit: 10, standardHe
 const aiLimiter = rateLimit({ windowMs: 24 * 60 * 60_000, limit: 10, keyGenerator: (req) => req.sessionID, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('ai_rate_limit', 'Batas harian generasi video tercapai.') });
 const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeaders: 'draft-8', legacyHeaders: false, handler: rateLimitHandler('login_rate_limit', 'Batas percobaan login admin terlampaui.') });
 
-app.get('/', (req, res) => res.render('index', { platforms: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'X'] }));
-app.post('/download', downloadLimiter, async (req, res) => {
+app.get('/', async (req, res, next) => {
   try {
+    const telegram = getPublicTelegramInfo();
+    const telegramQr = telegram.active ? await QRCode.toDataURL(telegram.url, { errorCorrectionLevel: 'M', margin: 1, width: 176, color: { dark: '#1b3340', light: '#ffffff' } }) : '';
+    res.set('Cache-Control', 'public, max-age=60, must-revalidate');
+    res.render('index', {
+      platforms: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'X'],
+      telegram,
+      telegramQr,
+      appUrl: config.appUrl,
+      maxFileMb: config.maxFileMb,
+      pageTitle: `${config.name} — Unduh Media Publik dengan Mudah`,
+      pageDescription: 'Unduh media publik dari Facebook, Instagram, TikTok, YouTube, dan X melalui proses yang sederhana dan bertanggung jawab.',
+    });
+  } catch (error) { next(error); }
+});
+app.post('/download', downloadLimiter, async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
     const media = await validateMediaUrl(req.body.url);
     const result = await runDownloadJob({ source: 'web', userRef: req.ip }, () => downloadMedia({ ...media, source: 'web', userRef: req.ip }));
-    res.download(result.filePath, result.fileName, () => fs.rm(result.filePath, { force: true }, () => {}));
+    res.download(result.filePath, result.fileName, (error) => {
+      fs.rm(result.filePath, { force: true }, () => {});
+      if (error) next(error);
+    });
   } catch (error) { res.status(422).render('error', { message: String(error?.message || 'Download gagal.').slice(0, 240) }); }
 });
 

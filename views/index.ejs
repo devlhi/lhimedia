@@ -7,14 +7,16 @@
       <span class="landing-eyebrow"><span aria-hidden="true">✦</span> Pengunduh media publik</span>
       <h1>Simpan momen yang<br><em>ingin kamu tonton lagi.</em></h1>
       <p>Tempel tautan dari platform favoritmu. BotLink menyiapkan file media dengan alur yang sederhana dan cepat.</p>
-      <form class="landing-download" action="/download" method="post">
+      <form class="landing-download" action="/download" method="post" data-download-form aria-busy="false">
         <label for="media-url" class="sr-only">Tautan media publik</label>
         <span class="landing-link-icon" aria-hidden="true">↗</span>
-        <input id="media-url" type="url" name="url" required maxlength="2048" placeholder="Tempel tautan video di sini" aria-describedby="download-note">
-        <button type="submit">Ambil media <span aria-hidden="true">→</span></button>
+        <input id="media-url" type="url" name="url" required maxlength="2048" placeholder="Tempel tautan video di sini" aria-describedby="platform-status download-note" autocomplete="url" inputmode="url">
+        <button class="landing-paste" type="button" data-paste-button>Tempel</button>
+        <button type="submit"><span data-button-label>Ambil media</span> <span aria-hidden="true">→</span></button>
       </form>
+      <p id="platform-status" class="landing-platform-status" data-platform-status role="status" aria-live="polite"></p>
       <p id="download-note" class="landing-note"><span aria-hidden="true">✓</span> Hanya gunakan untuk konten publik yang kamu miliki atau diizinkan pemiliknya.</p>
-      <div class="landing-proof" aria-label="Keunggulan layanan"><span><b>⚡</b> Proses ringkas</span><span><b>⌁</b> Tanpa aplikasi</span><span><b>◌</b> Privasi terjaga</span></div>
+      <div class="landing-proof" aria-label="Keunggulan layanan"><span><b>⚡</b> Proses ringkas</span><span><b>⌁</b> Tanpa aplikasi</span><span><b>◌</b> Pembersihan file otomatis</span></div>
     </div>
     <div class="landing-visual" aria-hidden="true">
       <div class="landing-card landing-card-main">
@@ -41,8 +43,20 @@
     <article><span class="landing-step-number">03</span><div class="landing-step-icon">↓</div><h3>Simpan media</h3><p>BotLink menyiapkan media, lalu kamu dapat menyimpannya saat sudah siap.</p></article>
   </div>
 </section>
+<% if(telegram.active){ %>
 <section class="landing-telegram">
-  <div><span>TELEGRAM BOT</span><h2>Lebih praktis lewat chat.</h2><p>Kirim tautan ke bot Telegram dan proses media tanpa perlu membuka browser.</p></div>
-  <div class="landing-chat-preview" aria-hidden="true"><span class="landing-chat-plane">➤</span><div><small>BotLink</small><b>Tempel link, kami bantu proses.</b></div><i>✓</i></div>
+  <div><span>TELEGRAM BOT</span><h2>Lebih praktis lewat chat.</h2><p>Kirim tautan ke <strong>@<%= telegram.username %></strong> dan proses media tanpa perlu membuka browser.</p><a class="landing-telegram-button" href="<%= telegram.url %>" target="_blank" rel="noopener noreferrer">Buka Bot Telegram <span aria-hidden="true">↗</span></a></div>
+  <div class="landing-telegram-qr"><img src="<%= telegramQr %>" width="176" height="176" alt="QR untuk membuka bot Telegram @<%= telegram.username %>"><small>Pindai lewat ponsel</small></div>
 </section>
-<%- include('partials/footer') %>
+<% } %>
+<section id="faq" class="landing-faq">
+  <div class="landing-section-heading"><span>PERTANYAAN UMUM</span><h2>Hal yang perlu diketahui.</h2><p>BotLink dirancang untuk media publik dan penggunaan yang bertanggung jawab.</p></div>
+  <div class="landing-faq-list">
+    <details><summary>Platform apa saja yang didukung?<span>+</span></summary><p>Facebook, Instagram, TikTok, YouTube, serta X/Twitter. Dukungan dapat berubah saat platform asal memperbarui sistemnya.</p></details>
+    <details><summary>Konten apa yang boleh diunduh?<span>+</span></summary><p>Gunakan hanya untuk konten publik milik sendiri atau konten yang telah diizinkan pemiliknya. Konten privat, DRM, playlist, cookie login, dan bypass akses tidak didukung.</p></details>
+    <details><summary>Berapa batas ukuran dan kualitas file?<span>+</span></summary><p>Ukuran file dibatasi hingga <%= maxFileMb %> MB. BotLink memilih media hingga 1080p jika format dan sumbernya tersedia.</p></details>
+    <details><summary>Mengapa proses bisa gagal atau lebih lama?<span>+</span></summary><p>Waktu proses bergantung pada ukuran media, antrean, koneksi sumber, dan perubahan dari platform asal. Coba kembali setelah beberapa saat bila layanan sedang sibuk.</p></details>
+    <details><summary>Apakah file disimpan selamanya?<span>+</span></summary><p>Tidak. File sementara dibersihkan otomatis setelah proses atau masa cleanup. Catatan operasional terbatas dapat disimpan untuk keamanan, pemeliharaan, dan pengendalian penyalahgunaan.</p></details>
+  </div>
+</section>
+<%- include('partials/footer', { scriptSrc: '/js/landing.js' }) %>

@@ -175,6 +175,18 @@ export function hasTelegramBot() {
   return Boolean(bot);
 }
 
+export function derivePublicTelegramInfo({ username = '', runtimeMode = '', isPolling = false, error = '' } = {}) {
+  const safeUsername = String(username);
+  const validUsername = /^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(safeUsername);
+  const active = (runtimeMode === 'polling' && isPolling) || runtimeMode === 'webhook';
+  if (!validUsername || error || !active) return { active: false, username: '', url: '' };
+  return { active: true, username: safeUsername, url: `https://t.me/${safeUsername}` };
+}
+
+export function getPublicTelegramInfo() {
+  return derivePublicTelegramInfo({ username: bot?.botInfo?.username, runtimeMode: mode, isPolling: pollingStarted, error: startupError });
+}
+
 export function telegramWebhookUrl() {
   return config.telegramMode === 'webhook' ? new URL(config.telegramWebhookPath, `${config.appUrl}/`).href : '';
 }
@@ -188,7 +200,8 @@ export async function startTelegram() {
   try {
     bot.botInfo = await bot.telegram.getMe();
     if (config.telegramMode === 'webhook') {
-      mode = 'webhook';
+      const webhook = await bot.telegram.getWebhookInfo();
+      mode = safeUrlEqual(webhook.url, telegramWebhookUrl()) ? 'webhook' : 'webhook-unset';
       startupError = '';
       return { mode, botInfo: bot.botInfo };
     }
