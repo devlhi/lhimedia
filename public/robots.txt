@@ -2,5 +2,5 @@ User-agent: *
 Disallow: /admin
 Disallow: /download
 Disallow: /callback
-Disallow: /webhook
+Disallow: /telegram/webhook/
 Allow: /

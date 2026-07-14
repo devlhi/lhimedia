@@ -13,10 +13,13 @@ const bot = config.botToken ? new Telegraf(config.botToken) : null;
 let mode = bot ? 'starting' : 'disabled';
 let startupError = '';
 let pollingStarted = false;
+let webhookCheckedAt = 0;
+let webhookVerification = null;
 let mutation = Promise.resolve();
 const cooldowns = new Map();
 const veoStatusChecks = new Map();
 const TERMINAL_VIDEO_STATUSES = new Set(['completed', 'failed', 'cancelled', 'expired']);
+const WEBHOOK_VERIFICATION_TTL_MS = 60_000;
 
 function safeMessage(error, fallback) {
   const message = String(error?.message || fallback).replace(/https?:\/\/\S+/gi, '[url]').replace(/bot\d+:[A-Za-z0-9_-]+/g, '[token]');
@@ -183,12 +186,35 @@ export function derivePublicTelegramInfo({ username = '', runtimeMode = '', isPo
   return { active: true, username: safeUsername, url: `https://t.me/${safeUsername}` };
 }
 
-export function getPublicTelegramInfo() {
+export async function getPublicTelegramInfo() {
+  if (config.telegramMode === 'webhook' && Date.now() - webhookCheckedAt >= WEBHOOK_VERIFICATION_TTL_MS) await revalidateWebhook();
   return derivePublicTelegramInfo({ username: bot?.botInfo?.username, runtimeMode: mode, isPolling: pollingStarted, error: startupError });
 }
 
 export function telegramWebhookUrl() {
   return config.telegramMode === 'webhook' ? new URL(config.telegramWebhookPath, `${config.appUrl}/`).href : '';
+}
+
+async function revalidateWebhook({ force = false } = {}) {
+  if (!bot || config.telegramMode !== 'webhook') return false;
+  if (!force && Date.now() - webhookCheckedAt < WEBHOOK_VERIFICATION_TTL_MS) return mode === 'webhook';
+  if (webhookVerification) return webhookVerification;
+  webhookVerification = bot.telegram.getWebhookInfo()
+    .then((info) => {
+      const verified = safeUrlEqual(info.url, telegramWebhookUrl());
+      mode = verified ? 'webhook' : 'webhook-unset';
+      startupError = '';
+      webhookCheckedAt = Date.now();
+      return verified;
+    })
+    .catch((error) => {
+      mode = 'error';
+      startupError = safeMessage(error, 'Webhook Telegram tidak dapat diverifikasi.');
+      webhookCheckedAt = Date.now();
+      return false;
+    })
+    .finally(() => { webhookVerification = null; });
+  return webhookVerification;
 }
 
 export async function startTelegram() {
@@ -200,9 +226,7 @@ export async function startTelegram() {
   try {
     bot.botInfo = await bot.telegram.getMe();
     if (config.telegramMode === 'webhook') {
-      const webhook = await bot.telegram.getWebhookInfo();
-      mode = safeUrlEqual(webhook.url, telegramWebhookUrl()) ? 'webhook' : 'webhook-unset';
-      startupError = '';
+      await revalidateWebhook({ force: true });
       return { mode, botInfo: bot.botInfo };
     }
     await bot.telegram.deleteWebhook({ drop_pending_updates: false });
@@ -241,6 +265,12 @@ export async function getTelegramStatus() {
   }
   try {
     const [me, webhook] = await Promise.all([bot.telegram.getMe(), bot.telegram.getWebhookInfo()]);
+    if (config.telegramMode === 'webhook') {
+      const verified = safeUrlEqual(webhook.url, telegramWebhookUrl());
+      mode = verified ? 'webhook' : 'webhook-unset';
+      startupError = '';
+      webhookCheckedAt = Date.now();
+    }
     return {
       configured: true,
       mode,
@@ -250,6 +280,11 @@ export async function getTelegramStatus() {
       webhook: normalizeWebhookInfo(webhook),
     };
   } catch (error) {
+    if (config.telegramMode === 'webhook') {
+      mode = 'error';
+      startupError = safeMessage(error, 'Status Telegram tidak dapat diambil.');
+      webhookCheckedAt = Date.now();
+    }
     return { configured: true, mode, startupError: safeMessage(error, 'Status Telegram tidak dapat diambil.'), bot: null, expectedWebhookUrl: telegramWebhookUrl(), webhook: null };
   }
 }
@@ -269,6 +304,7 @@ export async function setTelegramWebhook({ dropPendingUpdates = false } = {}) {
     if (!safeUrlEqual(info.url, url)) throw new Error('Telegram tidak mengonfirmasi URL webhook yang dikonfigurasi.');
     mode = 'webhook';
     startupError = '';
+    webhookCheckedAt = Date.now();
     console.info('Telegram webhook disetel oleh admin.');
     return normalizeWebhookInfo(info);
   });
@@ -281,6 +317,7 @@ export async function deleteTelegramWebhook({ dropPendingUpdates = false } = {})
     const info = await bot.telegram.getWebhookInfo();
     if (info.url) throw new Error('Telegram masih melaporkan webhook aktif.');
     mode = config.telegramMode === 'polling' ? 'polling' : 'webhook-unset';
+    webhookCheckedAt = 0;
     console.info('Telegram webhook dihapus oleh admin.');
     return normalizeWebhookInfo(info);
   });

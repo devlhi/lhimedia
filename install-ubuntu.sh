@@ -9,6 +9,7 @@ SERVICE_NAME="botlink"
 SERVICE_USER="botlink"
 ENV_FILE="$APP_DIR/.env"
 NODE_MAJOR=22
+NODE_MIN_MINOR=5
 BACKUP_ENV=""
 
 fail() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
@@ -50,7 +51,7 @@ prompt_password() {
 }
 
 valid_https_url() {
-  [[ "$1" =~ ^https://[A-Za-z0-9._~:/?#\[\]@!$\&\(\)*+,\;=%-]+$ ]] && [[ "$1" != *"@"* ]]
+  [[ "$1" =~ ^https://[A-Za-z0-9._~:/\[\]!$\&\(\)*+,\;=%-]+$ ]] && [[ "$1" != *"@"* && "$1" != *"?"* && "$1" != *"#"* ]]
 }
 
 env_quote() {
@@ -162,12 +163,22 @@ install_missing_packages ca-certificates curl gnupg openssl ffmpeg python3 pytho
 if command -v node >/dev/null 2>&1; then
   INSTALLED_NODE_VERSION="$(node --version)"
   INSTALLED_NODE_MAJOR="$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || true)"
+  INSTALLED_NODE_MINOR="$(node -p 'Number(process.versions.node.split(`.`)[1])' 2>/dev/null || true)"
 else
   INSTALLED_NODE_VERSION="tidak tersedia"
   INSTALLED_NODE_MAJOR=0
+  INSTALLED_NODE_MINOR=0
 fi
 
-if ! [[ "$INSTALLED_NODE_MAJOR" =~ ^[0-9]+$ ]] || (( INSTALLED_NODE_MAJOR < NODE_MAJOR )); then
+# Cek apakah Node.js memadai: Major > 22 ATAU (Major == 22 dan Minor >= 5)
+NODE_OK=false
+if (( INSTALLED_NODE_MAJOR > NODE_MAJOR )); then
+  NODE_OK=true
+elif (( INSTALLED_NODE_MAJOR == NODE_MAJOR )) && (( INSTALLED_NODE_MINOR >= NODE_MIN_MINOR )); then
+  NODE_OK=true
+fi
+
+if [[ "$NODE_OK" != true ]]; then
   printf 'Node.js %s terdeteksi; memasang Node.js %s.x.\n' "$INSTALLED_NODE_VERSION" "$NODE_MAJOR"
   install -m 0755 -d /etc/apt/keyrings
   NODE_SOURCE_KEYRING='/etc/apt/keyrings/nodesource.gpg'
@@ -180,11 +191,18 @@ if ! [[ "$INSTALLED_NODE_MAJOR" =~ ^[0-9]+$ ]] || (( INSTALLED_NODE_MAJOR < NODE
   apt_update_once
   apt-get install -y --no-install-recommends nodejs
 else
-  printf 'Node.js %s sudah memenuhi kebutuhan (>= %s).\n' "$INSTALLED_NODE_VERSION" "$NODE_MAJOR"
+  printf 'Node.js %s sudah memenuhi kebutuhan (>= %s.%s).\n' "$INSTALLED_NODE_VERSION" "$NODE_MAJOR" "$NODE_MIN_MINOR"
 fi
 
 FINAL_NODE_MAJOR="$(node -p 'Number(process.versions.node.split(`.`)[0])' 2>/dev/null || true)"
-[[ "$FINAL_NODE_MAJOR" =~ ^[0-9]+$ ]] && (( FINAL_NODE_MAJOR >= NODE_MAJOR )) || fail "Node.js ${NODE_MAJOR} atau lebih baru gagal dipasang."
+FINAL_NODE_MINOR="$(node -p 'Number(process.versions.node.split(`.`)[1])' 2>/dev/null || true)"
+FINAL_NODE_OK=false
+if (( FINAL_NODE_MAJOR > NODE_MAJOR )); then
+  FINAL_NODE_OK=true
+elif (( FINAL_NODE_MAJOR == NODE_MAJOR )) && (( FINAL_NODE_MINOR >= NODE_MIN_MINOR )); then
+  FINAL_NODE_OK=true
+fi
+[[ "$FINAL_NODE_OK" == true ]] || fail "Node.js ${NODE_MAJOR}.${NODE_MIN_MINOR} atau lebih baru gagal dipasang."
 command -v npm >/dev/null 2>&1 || fail "npm tidak tersedia setelah instalasi Node.js."
 
 id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"

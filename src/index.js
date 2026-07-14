@@ -31,7 +31,7 @@ app.set('view engine', 'ejs');
 app.set('views', path.resolve('views'));
 app.disable('x-powered-by');
 if (config.isProduction) app.set('trust proxy', ['loopback']);
-app.use(helmet({ contentSecurityPolicy: { directives: { 'script-src': ["'self'"], 'style-src': ["'self'", 'https://fonts.googleapis.com'], 'font-src': ["'self'", 'https://fonts.gstatic.com'] } } }));
+app.use(helmet({ contentSecurityPolicy: { directives: { 'script-src': ["'self'"], 'style-src': ["'self'", 'https://fonts.googleapis.com'], 'font-src': ["'self'", 'https://fonts.gstatic.com'], 'upgrade-insecure-requests': config.isProduction ? [] : null } } }));
 const webhookMiddleware = telegramWebhookMiddleware();
 if (webhookMiddleware) app.post(config.telegramWebhookPath, express.json({ limit: '256kb', type: 'application/json' }), webhookMiddleware);
 app.use(express.urlencoded({ extended: false, limit: '20kb' }));
@@ -90,11 +90,11 @@ const loginLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 5, standardHeader
 
 app.get('/', async (req, res, next) => {
   try {
-    const telegram = getPublicTelegramInfo();
+    const telegram = await getPublicTelegramInfo();
     const telegramQr = telegram.active ? await QRCode.toDataURL(telegram.url, { errorCorrectionLevel: 'M', margin: 1, width: 176, color: { dark: '#1b3340', light: '#ffffff' } }) : '';
-    res.set('Cache-Control', 'public, max-age=60, must-revalidate');
+    res.set('Cache-Control', 'private, no-store');
     res.render('index', {
-      platforms: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'X'],
+      platforms: ['Facebook', 'Instagram', 'TikTok', 'YouTube', 'X/Twitter'],
       telegram,
       telegramQr,
       appUrl: config.appUrl,
